@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "bundle": "webpack",
     "watch": "webpack --watch",
-    "serve": "cd dist && live-server"
+    "serve": "cd dist && live-server",
+    "clean": "rm dist/*.?s"
   },
   "keywords": [],
   "author": "",

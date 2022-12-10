@@ -145,7 +145,17 @@ function manager(): void {
 }
 
 init();
-manager();
+ manager();
+
+if (window.Worker) {
+    let worker = new Worker("worker.js");
+    worker.onmessage = function(ev) {
+        console.log("got result from worker")
+        console.log(ev.data);
+    }
+
+    worker.postMessage([2, 3, 5]);
+}
 
 
 
@@ -207,4 +217,22 @@ Option 3: Single worker always alive (not possible)
 - note: worker might need to maintain its own event manager and keep checking for
         new messages with new canvas configs and quit previous canvas computations
 
+*/
+
+
+//////////////////////////////////////////////////////////////////
+
+/* setup for workers in ts */
+
+/*
+in webpack.config.js
+- set `entry` to object, to multiple entries
+- add entries for main.js/index.js/bundle.js and worker.js
+
+    entry: {
+        bundle: './src/index.ts',
+        worker: './src/worker.ts',
+    }
+
+- set output per filename as "[name].js", where [name] refers to key name from `entry`
 */
