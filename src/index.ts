@@ -60,7 +60,7 @@ let imgData: ImageData = ctx.createImageData(WIDTH, HEIGHT);
 // canvas.addEventListener("mouseup", () => console.log("mouse up"));
 
 let EventQueue: (MouseEvent | KeyboardEvent)[] = [];
-let left = -WIDTH/2, right = WIDTH/2, top = -HEIGHT/2, bottom = HEIGHT/2;
+let left = -WIDTH/2, top = -HEIGHT/2, right = WIDTH/2, bottom = HEIGHT/2;
 
 let pixel_iterations: number[] = [];
 let pixel_zvalues: Complex[] = [];
@@ -145,16 +145,29 @@ function manager(): void {
 }
 
 init();
- manager();
+//manager();
 
 if (window.Worker) {
     let worker = new Worker("worker.js");
     worker.onmessage = function(ev) {
-        console.log("got result from worker")
-        console.log(ev.data);
+//        console.log("got result from worker");
+//        console.log(ev.data);
+        for (let x = 0; x < WIDTH; x++) {
+            for (let y = 0; y < HEIGHT; y++) {
+                const index = y*WIDTH + x;
+                setPixelColor(x, y, imgData, JarringColors[ev.data[index]]);
+            }
+        }
+        ctx.putImageData(imgData, 0, 0);
     }
 
-    worker.postMessage([2, 3, 5]);
+    let data: any;
+    data = {constants: {}, bounds: {}, poly_params: {}};
+    data.constants = {width: WIDTH, height: HEIGHT, max_iter: MAX_ITER};
+    data.bounds = {left, top, right, bottom};
+    data.roots = roots;
+
+    worker.postMessage(data);
 }
 
 
@@ -235,4 +248,11 @@ in webpack.config.js
     }
 
 - set output per filename as "[name].js", where [name] refers to key name from `entry`
+*/
+
+/*
+in tsconfig.json
+- add `lib` key within compiler options and add "webworker" to in
+https://github.com/gibbok/typescript-web-workers/blob/master/tsconfig.json
+https://stackoverflow.com/questions/56356655/structuring-a-typescript-project-with-workers
 */
