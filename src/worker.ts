@@ -2,6 +2,8 @@ import { Polynomial } from "../modules/polynomial";
 import { Complex } from "../modules/complex";
 import { closest_root, iterate } from "./utils";
 
+// so that ctx.postMessage is recognized as web worker's postMessage
+// (requires "webworker" (and "ES6" and "DOM") in "lib" option in tsconfig)
 let ctx = self as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = function(ev: MessageEvent) {

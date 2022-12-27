@@ -6,7 +6,7 @@ import {closest_root, iterate} from "./utils";
 
 const WIDTH = 600;
 const HEIGHT = 600;
-const MAX_ITER = 10;
+const MAX_ITER = 15;
 
 const canvas: HTMLCanvasElement = document.createElement("canvas");
 document.body.append(canvas);
@@ -15,159 +15,77 @@ canvas.id = "plane";
 canvas.width = WIDTH;
 canvas.height = HEIGHT;
 const ctx: CanvasRenderingContext2D = canvas.getContext("2d")!;  // ! at end asserts result not null
-
-// ctx.fillStyle = 'green';
-// ctx.fillRect(10, 10, 100, 100);
+let currentWorker: Worker | null = null;
 
 const roots = [new Complex(100, 0), new Complex(100, -60), new Complex(-50, 250), new Complex(0, 0)];
-const p = new Polynomial(roots, false);
-const dp = p.differentiate();
+// const p = new Polynomial(roots, false);
+// const dp = p.differentiate();
 
 let imgData: ImageData = ctx.createImageData(WIDTH, HEIGHT);
-//function step(): void {
-//    console.log(new Date());
-//    for (let x = 0; x < WIDTH; x++) {
-//        for (let y = 0; y < HEIGHT; y++) {
-//            const new_x = (x - WIDTH / 2);
-//            const new_y = (y - HEIGHT / 2);
-//            const c = computePointColor(p, roots, new Complex(new_x, new_y), iter, dp);
-//            setPixelColor(x, y, imgData, c);
-//        }
-//    }
-//    ctx.putImageData(imgData, 0, 0);
-//    console.log(new Date());
-//    iter++;
-//}
 
-// setPixelColor(10 + WIDTH/2, HEIGHT/2, imgData, Color.Black)
-// setPixelColor(30 + WIDTH/2, HEIGHT/2, imgData, Color.Yellow)
-// setPixelColor(-50 + WIDTH/2, 50 + HEIGHT/2, imgData, Color.Cyan)
-// // imgData.data[0] = 255;
-// ctx.putImageData(imgData, 0, 0);
+canvas.addEventListener("mousedown", () => console.log("mouse down"));
 
-//canvas.addEventListener("mousedown", function (ev: MouseEvent): void {
-//    // console.log(ev.clientX-canvas.offsetLeft, ev.clientY-canvas.offsetTop);
-//    const new_x = ev.clientX-canvas.offsetLeft;
-//    const new_y = ev.clientY-canvas.offsetTop;
-//    const c = computePointColor(p, roots, new Complex(new_x - WIDTH/2, new_y - HEIGHT/2), 0, dp);
-////     console.log(closest_root(new Complex(new_x - WIDTH/2, new_y - HEIGHT/2), roots));
-////     console.log(c);
-//    step();
-//});
-
-//
-// canvas.addEventListener("mousedown", blocking);
-// canvas.addEventListener("mouseup", () => console.log("mouse up"));
-
-let EventQueue: (MouseEvent | KeyboardEvent)[] = [];
 let left = -WIDTH/2, top = -HEIGHT/2, right = WIDTH/2, bottom = HEIGHT/2;
 
-let pixel_iterations: number[] = [];
-let pixel_zvalues: Complex[] = [];
 
 // no reuse version
-
-function init(): void {
-    for (let i = 0; i < WIDTH * HEIGHT; i++) {
-        pixel_iterations.push(-1);
-        pixel_zvalues.push(new Complex());
-    }
-}
-
-function reset(): void {
-    for (let i = 0; i < pixel_iterations.length; i++) {
-        pixel_iterations[i] = 0;
-        // check for off-by-one errors
-        const real = left + i % WIDTH;
-        const imag = top + Math.floor(i / WIDTH);
-        pixel_zvalues[i] = new Complex(real, imag);
-    }
-    debug("bounds", "left: " + left + " | top: " + top + " | right: " + right + " | bottom: " + bottom);
-}
 
 function debug(span_id: string, msg: any): void {
     (document.getElementById(span_id) as HTMLSpanElement).innerText = msg;
 }
 
-// step each pixel by one iteration
-function step(): void {
-    let start: any = new Date();
-    for (let x = 0; x < WIDTH; x++) {
-        for (let y = 0; y < HEIGHT; y++) {
-            const index = y*WIDTH + x;
-            if (pixel_iterations[index] >= MAX_ITER) continue;
-
-            const z = pixel_zvalues[index];
-            const new_z: Complex = iterate(p, z, 1, dp);
-
-            pixel_zvalues[index] = new_z;
-            pixel_iterations[index]++;
-
-            const color_idx = closest_root(new_z, roots);
-            setPixelColor(x, y, imgData, JarringColors[color_idx]);
-        }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    let stop: any = new Date();
-    debug("step-duration", stop - start);
-}
-
-
-canvas.addEventListener("keydown", (e) => {EventQueue.push(e);});
+canvas.addEventListener("keydown", keydownHandler);
 
 
 // check for any pending events in my_event_queue and handle them (book-keeping) (!blocking!)
 // if event queue empty then dispatch worker one time (!blocking!)
-function manager(): void {
-    while (EventQueue.length > 0) {
-        let event = EventQueue.shift();
-        if (typeof(event) === "undefined") continue;
-        // console.log(event?.key);
-        if (event instanceof KeyboardEvent) {
-            // keyboard pan event
-            if (event.key.indexOf("Arrow") >= 0) {
-                switch (event?.key) {
-                    case "ArrowLeft":
-                        left -= 20; right -= 20; break;
-                    case "ArrowRight":
-                        left += 20; right += 20; break;
-                    case "ArrowUp":
-                        top -= 20; bottom -= 20; break;
-                    case "ArrowDown":
-                        top += 20; bottom += 20; break;
-                }
-                reset();
-            }
+function keydownHandler(event: KeyboardEvent): void {
+    // keyboard pan event
+    if (event.key.indexOf("Arrow") >= 0) {
+        switch (event?.key) {
+            case "ArrowLeft":
+                left -= 20; right -= 20; break;
+            case "ArrowRight":
+                left += 20; right += 20; break;
+            case "ArrowUp":
+                top -= 20; bottom -= 20; break;
+            case "ArrowDown":
+                top += 20; bottom += 20; break;
         }
+        debug("bounds", "left: " + left + " | top: " + top + " | right: " + right + " | bottom: " + bottom);
+        setupWorker();
     }
-    step();
-    window.setTimeout(manager, 20);  // todo: find right timing
 }
 
-init();
-//manager();
 
-if (window.Worker) {
-    let worker = new Worker("worker.js");
-    worker.onmessage = function(ev) {
-//        console.log("got result from worker");
-//        console.log(ev.data);
-        for (let x = 0; x < WIDTH; x++) {
-            for (let y = 0; y < HEIGHT; y++) {
-                const index = y*WIDTH + x;
-                setPixelColor(x, y, imgData, JarringColors[ev.data[index]]);
+function setupWorker() {
+    if (window.Worker) {
+        currentWorker?.terminate();
+        let worker = new Worker("worker.js");
+        currentWorker = worker;
+
+        console.log(currentWorker);
+        worker.onmessage = function(ev) {
+            for (let x = 0; x < WIDTH; x++) {
+                for (let y = 0; y < HEIGHT; y++) {
+                    const index = y*WIDTH + x;
+                    setPixelColor(x, y, imgData, JarringColors[ev.data[index]]);
+                }
             }
+            ctx.putImageData(imgData, 0, 0);
         }
-        ctx.putImageData(imgData, 0, 0);
+
+        let data: any;
+        data = {constants: {}, bounds: {}, poly_params: {}};
+        data.constants = {width: WIDTH, height: HEIGHT, max_iter: MAX_ITER};
+        data.bounds = {left, top, right, bottom};
+        data.roots = roots;
+
+        worker.postMessage(data);
+        currentWorker = worker;
+    } else {
+        debug("general", "your browser does not support web workers")
     }
-
-    let data: any;
-    data = {constants: {}, bounds: {}, poly_params: {}};
-    data.constants = {width: WIDTH, height: HEIGHT, max_iter: MAX_ITER};
-    data.bounds = {left, top, right, bottom};
-    data.roots = roots;
-
-    worker.postMessage(data);
 }
 
 
@@ -235,9 +153,10 @@ Option 3: Single worker always alive (not possible)
 
 //////////////////////////////////////////////////////////////////
 
-/* setup for workers in ts */
+/* working setup for workers in ts */
 
 /*
+
 in webpack.config.js
 - set `entry` to object, to multiple entries
 - add entries for main.js/index.js/bundle.js and worker.js
@@ -248,11 +167,15 @@ in webpack.config.js
     }
 
 - set output per filename as "[name].js", where [name] refers to key name from `entry`
-*/
 
-/*
+
+in worker.ts
+- add line `let ctx = self as DedicatedWorkerGlobalScope;`
+
+
 in tsconfig.json
 - add `lib` key within compiler options and add "webworker" to in
 https://github.com/gibbok/typescript-web-workers/blob/master/tsconfig.json
 https://stackoverflow.com/questions/56356655/structuring-a-typescript-project-with-workers
+
 */
